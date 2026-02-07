@@ -12,29 +12,29 @@ MACROS="{{ macro_path }}"
 PKG="{{ package_path }}"
 RTL="{{ rtl_path }}"
 TB="{{ tb_path }}"
+SIM_OUT_DIR="{{ sim_output_dir }}"
 
 # Build products
-BUILD_DIR="${BUILD_DIR:-build/{{ peripheral_name }}}"
-OUT_ELF="${OUT_ELF:-${BUILD_DIR}/{{ peripheral_name }}_tb.vvp}"
-LOG="${LOG:-${BUILD_DIR}/sim.log}"
+OUT_ELF="${SIM_OUT_DIR}/{{ peripheral_name }}_tb.vvp"
+LOG="${SIM_OUT_DIR}/sim.log"
+VCD="${SIM_OUT_DIR}/sim.vcd"
 
 # Tools (override with env vars if you want)
 IVERILOG="${IVERILOG:-iverilog}"
 VVP="${VVP:-vvp}"
 GTKWAVE="${GTKWAVE:-gtkwave}"
 
-# Optional: expected waveform path (your TB should create it)
-# You can override from CLI: VCD=/path/to/file.vcd ./run_tb.sh
-VCD="${VCD:-${BUILD_DIR}/waves.vcd}"
-
-mkdir -p "${BUILD_DIR}"
+mkdir -p "${SIM_OUT_DIR}"
 
 echo "[INFO] Using:"
-echo "  MACROS: ${MACROS}"
-echo "  PKG:    ${PKG}"
-echo "  RTL:    ${RTL}"
-echo "  TB:     ${TB}"
-echo "  BUILD:  ${BUILD_DIR}"
+echo "  MACROS:     ${MACROS}"
+echo "  PKG:        ${PKG}"
+echo "  RTL:        ${RTL}"
+echo "  TB:         ${TB}"
+echo "  SIM_OUT:    ${SIM_OUT_DIR}"
+echo "  OUT_ELF:    ${OUT_ELF}"
+echo "  LOG:        ${LOG}"
+echo "  VCD:        ${VCD}"
 echo
 
 # Basic sanity checks (fail fast with a useful message)
@@ -51,12 +51,8 @@ INC_PKG="$(dirname "${PKG}")"
 INC_RTL="$(dirname "${RTL}")"
 INC_TB="$(dirname "${TB}")"
 
-# You can pass extra compile args via env var:
-#   IVERILOG_ARGS="-DDEBUG -Wall" ./run_tb.sh
+# Optional compile/runtime args
 IVERILOG_ARGS="${IVERILOG_ARGS:-}"
-
-# You can pass runtime plusargs via env var:
-#   PLUSARGS="+seed=1 +vcd={{ peripheral_name }}.vcd" ./run_tb.sh
 PLUSARGS="${PLUSARGS:-}"
 
 echo "[INFO] Compiling (iverilog)..."
@@ -83,7 +79,6 @@ if [[ -f "${VCD}" ]]; then
   echo "[INFO] Waveform: ${VCD}"
 else
   echo "[WARN] No VCD found at: ${VCD}"
-  echo "       If your TB dumps to a different name/path, set VCD=... when running."
 fi
 
 # Optional convenience: ./run_tb.sh --wave

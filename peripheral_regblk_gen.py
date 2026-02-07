@@ -225,14 +225,16 @@ def generate_c_defs(yaml_file, cdef_op_dir):
     with open(cdef_op_dir, "w") as cdef_file:
         cdef_file.write(csr_defs_output)
 
-def generate_run_script(peripheral_name, script_output_dir, macro_path, package_path, rtl_path, tb_path):
+def generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macro_path, package_path, rtl_path, tb_path):
     script_path = f"{script_output_dir}/run_regfile_tb.sh"
+    sim_output_dir = os.path.abspath(sim_output_dir)
 
     # Jinja setup
     env = Environment(loader=FileSystemLoader("templates"))
 
     run_script_template = env.get_template("run_regfile_tb_template.sh.j2")
     run_script_output = run_script_template.render(peripheral_name=peripheral_name,
+                                                   sim_output_dir=sim_output_dir,
                                                    macro_path=macro_path,
                                                    package_path=package_path,
                                                    tb_path=tb_path,
@@ -259,6 +261,7 @@ def main():
     macro_output_dir = path_info.get("macro_output_dir", "./outputs")
     cdef_output_dir = path_info.get("cdef_output_dir", "./outputs")
     script_output_dir = path_info.get("script_output_dir", "./outputs")
+    sim_output_dir = path_info.get("sim_output_dir", "./outputs")
 
     yaml_file = f"./outputs/{peripheral_name}_registers.yml"
 
@@ -274,8 +277,7 @@ def main():
     macro_path = generate_macros(peripheral_name, yaml_file, macro_output_dir)
     package_path = generate_package(peripheral_name, yaml_file, package_output_dir)
     rtl_path, tb_path = generate_rtl(peripheral_name, yaml_file, rtl_output_dir, tb_output_dir)
-
-    generate_run_script(peripheral_name, script_output_dir, macro_path, package_path, rtl_path, tb_path)
+    generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macro_path, package_path, rtl_path, tb_path)
 
     # generate_c_defs(yaml_file, cdef_output_dir)
     #

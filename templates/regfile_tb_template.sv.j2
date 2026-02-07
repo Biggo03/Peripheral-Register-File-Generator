@@ -152,7 +152,7 @@ module {{ peripheral_name }}_regfile_tb;
     );
 
     initial begin
-        $dumpfile("{{ peripheral_name }}_regfile_tb.vcd");
+        $dumpfile("sim.vcd");
         $dumpvars(0, {{ peripheral_name }}_regfile_tb);
 
         $display("==== Starting {{ peripheral_name }} Register File Test ====");
@@ -215,7 +215,7 @@ module {{ peripheral_name }}_regfile_tb;
     {%- if "W" not in group_info.ACCESS %}
         {% for reg, reg_info in reg_data[group].items() %}
         // Set raddr to register {{ reg }}
-        read_register({{ reg_info.ADDR_MACRO }}, tb_rdata);
+        reg_raddr_i = {{ reg_info.ADDR_MACRO }};
 
         // Write all fields in register to all 1's
             {%- for field, field_info in reg_info["FIELDS"].items() %}
@@ -224,6 +224,8 @@ module {{ peripheral_name }}_regfile_tb;
         if (reg_rdata_o{{ field_info.BITS }} != '1) begin
             $display("update check for {{ field }} failed");
             error_cnt++;
+        end else begin
+            $display("[%t] Read %0b from {{ field }}", $realtime, reg_rdata_o{{ field_info.BITS }});
         end
             {%- endfor %}
         {%- endfor %}

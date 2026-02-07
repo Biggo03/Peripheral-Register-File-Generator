@@ -13,3 +13,5 @@ macro_output_dir: "./example_destination"
 cdef_output_dir: "./example_destination"
 
 script_output_dir: "./example_destination"
+
+sim_output_dir: "./example_destination"
