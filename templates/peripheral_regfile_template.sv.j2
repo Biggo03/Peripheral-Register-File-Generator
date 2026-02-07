@@ -1,0 +1,100 @@
+`timescale 1ns / 1ps
+//==============================================================//
+//  Module:       csr_reg_file
+//  File:         csr_reg_file.sv
+//  Description:  Auto-generated CSR register file.
+//
+//                 This module defines all supported CSRs along with
+//                 their reset values, access permissions, and address
+//                 decoding logic. The structure and content of this file
+//                 are generated automatically from the CSR specification
+//                 (YAML/Excel source).
+//
+//  Author:       Viggo Wozniak
+//  Project:      RISC-V Processor
+//  Repository:   https://github.com/Biggo03/RISC-V-Pipelined
+//
+//  Parameters:   N/A
+//
+//  Notes:        - This file is partially auto-generated.
+//                - Do not edit auto-generated sections directly; they may
+//                  be overwritten by regeneration scripts.
+//==============================================================//
+`include "reg_macros.sv"
+import {{ peripheral_name }}_reg_pkg::*;
+
+module {{ peripheral_name }}_regfile (
+    // -- Clk and Reset --
+    input logic         clk_i,
+    input logic         reset_i,
+
+    // -- Write Signals --
+    input logic         reg_we_i,
+    input logic [{{ reg_data.ADDR_WIDTH - 1 }}:0]  reg_waddr_i,
+    input logic [31:0]  reg_wdata_i,
+
+    // -- Read Signals --
+    input  logic [{{ reg_data.ADDR_WIDTH - 1 }}:0] reg_raddr_i,
+    output logic [31:0] reg_rdata_o,
+
+    // -- Register Groups --
+    {%- for group, group_info in group_data.items() %}
+    {%- if group_info.ACCESS != "RW" %}
+    input {{ peripheral_name }}_reg_pkg::{{ group.lower() }}_reg_t {{ group.lower() }}_grp,
+    {%- else %}
+    output {{ peripheral_name }}_reg_pkg::{{ group.lower() }}_reg_t {{ group.lower() }}_grp,
+    {%- endif %}
+    {%- endfor %}
+
+);
+
+    always_ff @(posedge clk_i) begin : reg_write_ff
+        if (reset_i) begin
+        {%- for group, group_info in group_data.items() %}
+        {%- if group_info.ACCESS == "RW" %}
+
+            {%- for reg_name, reg_info in reg_data[group].items() %}
+            // {{ reg_name }}
+            {%- for field_name, field_info in reg_info.FIELDS.items() %}
+            {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len) }} <= {{ field_info.RESET_VAL }};
+            {%- endfor %}
+            {% endfor %}
+
+        {%- endif %}
+        {%- endfor %}
+        end else begin
+            unique case (reg_waddr_i)
+            {%- for group, group_info in group_data.items() %}
+            {%- if group_info.ACCESS == "RW" %}
+                {%- for reg_name, reg_info in reg_data[group].items() %}
+                {{ reg_info.ADDR_MACRO }}:
+                begin
+                    {%- for field_name, field_info in reg_info.FIELDS.items() %}
+                    {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len) }} <= reg_wdata_i{{ field_info.BITS }};
+                    {%- endfor %}
+                end
+                {% endfor %}
+        {%- endif %}
+        {%- endfor -%}
+            endcase
+        end
+    end
+
+    always_comb begin : reg_read_comb
+        reg_rdata_o = 32'h0;
+        unique case (reg_raddr_i)
+        {%- for group, group_info in group_data.items() %}
+            {%- for reg_name, reg_info in reg_data[group].items() %}
+            {{ reg_info.ADDR_MACRO }}:
+            begin
+            {%- for field_name, field_info in reg_info.FIELDS.items() %}
+                reg_rdata_o{{ field_info.BITS }} = {{ group.lower() }}_grp.{{ field_name }};
+            {%- endfor %}
+            end
+            {%- endfor %}
+        {%- endfor %}
+        endcase
+    end
+
+endmodule
+

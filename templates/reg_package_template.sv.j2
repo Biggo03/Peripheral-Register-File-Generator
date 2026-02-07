@@ -1,0 +1,46 @@
+//==============================================================//
+//  Module:       csr_reg_file
+//  File:         csr_reg_file.sv
+//  Description:  Auto-generated CSR register file.
+//
+//                 This module defines all supported CSRs along with
+//                 their reset values, access permissions, and address
+//                 decoding logic. The structure and content of this file
+//                 are generated automatically from the CSR specification
+//                 (YAML/Excel source).
+//
+//  Author:       Viggo Wozniak
+//  Project:      RISC-V Processor
+//  Repository:   https://github.com/Biggo03/RISC-V-Pipelined
+//
+//  Parameters:   N/A
+//
+//  Notes:        - This file is partially auto-generated.
+//                - Do not edit auto-generated sections directly; they may
+//                  be overwritten by regeneration scripts.
+//==============================================================//
+
+package {{ peripheral_name }}_reg_pkg;
+
+{%- for reg_group in reg_data.keys() %}
+{%- if reg_group != "ADDR_WIDTH" %}
+
+    typedef struct packed {
+    {%- for reg_name, reg_info in reg_data[reg_group].items() %}
+        // {{ reg_name }}
+        // {{ reg_info.REG_DESCRIPTION }}
+    {%- for field_name, field_info in reg_info.FIELDS.items() %}
+        {%- if field_info.WIDTH == 1 %}
+        reg        {{ field_name }}; // {{ field_info.FIELD_DESCRIPTION }}
+        {%- else %}
+        reg [{{ field_info.WIDTH - 1 }}:0]  {{ field_name }}; // {{ field_info.FIELD_DESCRIPTION }}
+        {%- endif %}
+    {%- endfor %}
+    {% endfor %}
+    } {{ reg_group.lower() }}_reg_t;
+
+{%- endif %}
+{%- endfor %}
+
+endpackage
+

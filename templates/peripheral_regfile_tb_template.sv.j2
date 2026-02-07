@@ -1,0 +1,229 @@
+`timescale 1ns / 1ps
+`include "misc_tasks.sv"
+`include "reg_macros.sv"
+//==============================================================//
+//  Module:       {{ peripheral_name }}_reg_file_tb
+//  File:         {{ peripheral_name }}_reg_file_tb.sv
+//  Description:  Testbench for {{ peripheral_name }} register file.
+//
+//                 This testbench verifies the functionality of the
+//                 {{ peripheral_name }}_reg_file module, including:
+//                   - Reset value correctness
+//                   - Read/write access behavior
+//                   - Write-through behavior
+//                   - Auto-increment register tracking (if applicable)
+//
+//  Author:       Viggo Wozniak
+//  Project:      RISC-V Processor
+//  Repository:   https://github.com/Biggo03/RISC-V-Pipelined
+//
+//  Parameters:   CLK_PERIOD — simulation clock period
+//
+//  Notes:        - This file may be partially auto-generated using Jinja.
+//                - Manual sections (e.g., monitors or scoreboards) are
+//                  safe to modify and extend.
+//==============================================================//
+`include "reg_macros.sv"
+import {{ peripheral_name }}_reg_pkg::*;
+
+module {{ peripheral_name }}_reg_file_tb;
+
+    // ------------------------------------------------------------
+    //  Parameters
+    // ------------------------------------------------------------
+    localparam CLK_PERIOD = 10ns;
+
+    // ------------------------------------------------------------
+    //  u_dut Signals
+    // ------------------------------------------------------------
+    logic         clk_i;
+    logic         reset_i;
+
+    // -- Register Groups --
+    {%- for group in group_data.keys() %}
+    {{ peripheral_name }}_reg_pkg::{{ group.lower() }}_reg_t {{ group.lower() }}_grp;
+    {%- endfor %}
+
+    // -- Write Signals --
+    logic         reg_we_i;
+    logic [{{ reg_data.ADDR_WIDTH - 1 }}:0]  reg_waddr_i;
+    logic [31:0]  reg_wdata_i;
+
+    // -- Read Signals --
+    logic [{{ reg_data.ADDR_WIDTH - 1 }}:0] reg_raddr_i;
+    logic [31:0] reg_rdata_o;
+
+    // ------------------------------------------------------------
+    //  Testbench Signals
+    // ------------------------------------------------------------
+    logic [31:0] tb_rdata;
+    logic [31:0] tb_wdata;
+
+    logic [31:0] intermediate_data;
+
+    logic [63:0] clk_counter;
+    int          error_cnt;
+    // ------------------------------------------------------------
+    //  Clock and Reset Generation
+    // ------------------------------------------------------------
+    initial begin
+        clk_i = 0;
+        forever #(CLK_PERIOD/2) clk_i = ~clk_i;
+    end
+
+    task automatic apply_reset();
+    begin
+        tb_rdata = 0;
+        tb_wdata = 0;
+        clk_counter = 0;
+        error_cnt = 0;
+
+        reset_i      = 1'b1;
+        reg_we_i     = 1'b0;
+        reg_waddr_i  = '0;
+        reg_wdata_i  = '0;
+        reg_raddr_i  = '0;
+        repeat (5) @(posedge clk_i);
+        reset_i = 1'b0;
+    end
+    endtask
+
+    // ------------------------------------------------------------
+    //  Register Tasks
+    // ------------------------------------------------------------
+    task write_register(
+        input logic [{{ reg_data.ADDR_WIDTH - 1 }}:0] waddr,
+        input logic [31:0] wdata
+    );
+    begin
+        reg_we_i = 1'b1;
+        reg_waddr_i = waddr;
+        reg_wdata_i = wdata;
+        $display("[%t] Writing data %h to address %h", $realtime, wdata, waddr);
+        @(posedge clk_i);
+        reg_we_i = 1'b0;
+    end
+    endtask
+
+    task read_register(
+        input logic [{{ reg_data.ADDR_WIDTH - 1 }}:0] raddr,
+        output logic [31:0] rdata
+    );
+    begin
+        reg_raddr_i = raddr;
+        @(negedge clk_i);
+        rdata = reg_rdata_o;
+        $display("[%t] Read value %h from address %h", $realtime, rdata, raddr);
+    end
+    endtask
+
+    // ------------------------------------------------------------
+    //  u_dut Instantiation
+    // ------------------------------------------------------------
+    {{ peripheral_name }}_regfile u_dut (
+        // -- Clk and Reset --
+        .clk_i       (clk_i),
+        .reset_i     (reset_i),
+
+        // -- Register Groups --
+        {%- for group in group_data.keys() %}
+        .{{ group.lower() }}_grp ({{ group.lower() }}_grp),
+        {%- endfor %}
+
+        // -- Write Signals --
+        .reg_we_i    (reg_we_i),
+        .reg_waddr_i (reg_waddr_i),
+        .reg_wdata_i (reg_wdata_i),
+
+        // -- Read Signals --
+        .reg_raddr_i (reg_raddr_i),
+        .reg_rdata_o (reg_rdata_o),
+    );
+
+    initial begin
+
+        dump_setup;
+
+        $display("==== Starting {{ peripheral_name }} Register File Test ====");
+        apply_reset();
+
+        // Check reset
+        $display("[%t] Beginning reset check...", $realtime);
+{%- for group, group_reg_info in reg_data.items() -%}
+    {%- if "ADDR_WIDTH" not in group %}
+        {% for reg, reg_info in group_reg_info.items() %}
+        // Checking fields for register {{ reg }}
+            {%- for field, field_info in reg_info["FIELDS"].items() %}
+        if (u_dut.{{ group.lower() }}_grp.{{ field }} != {{ field_info.RESET_VAL }}) begin
+            $display("{{ field }} reset value incorrect");
+            error_cnt++;
+        end
+            {%- endfor %}
+        {% endfor %}
+    {%- endif %}
+{%- endfor %}
+
+        //Readcheck for registers
+        $display("[%t] Beginning read check for registers...", $realtime);
+{%- for group, group_reg_info in reg_data.items() %}
+    {%- if "ADDR_WIDTH" not in group %}
+        {% for reg, reg_info in group_reg_info.items() %}
+        // Reading register {{ reg }}
+        read_register({{ reg_info.ADDR_MACRO }}, tb_rdata);
+            {%- for field, field_info in reg_info["FIELDS"].items() %}
+        if (reg_rdata_o{{ field_info.BITS }} != {{ field_info.RESET_VAL }}) begin
+            $display("Reset check for {{ field }} failed");
+            error_cnt++;
+        end
+            {%- endfor %}
+        {%- endfor %}
+    {%- endif %}
+{%- endfor %}
+
+        // Writecheck for all W access groups
+        $display("[%t] Beginning write check for all writable registers...", $realtime);
+{%- for group, group_info in group_data.items() %}
+    {%- if "W" in group_info.ACCESS %}
+        {% for reg, reg_info in reg_data[group].items() %}
+        tb_wdata = $urandom();
+        write_register({{ reg_info.ADDR_MACRO }}, tb_wdata);
+        read_register({{ reg_info.ADDR_MACRO }}, tb_rdata);
+            {%- for field, field_info in reg_info["FIELDS"].items() %}
+        if (reg_rdata_o{{ field_info.BITS }} != tb_wdata{{ field_info.BITS }} || {{ group.lower() }}_grp.{{ field }} != tb_wdata{{ field_info.BITS }}) begin
+            $display("Write check for {{ field }} failed");
+            error_cnt++;
+        end
+            {%- endfor %}
+        {% endfor %}
+    {% endif %}
+{%- endfor %}
+
+        // Update check for all read only registers (from software perspective)
+        $display("[%t] Beginning update check for all read only registers...", $realtime);
+{%- for group, group_info in group_data.items() %}
+    {%- if "W" not in group_info.ACCESS %}
+        {% for reg, reg_info in reg_data[group].items() %}
+        // Set raddr to register {{ reg }}
+        read_register({{ reg_info.ADDR_MACRO }}, tb_rdata);
+
+        // Write all fields in register to all 1's
+            {%- for field, field_info in reg_info["FIELDS"].items() %}
+        {{ group.lower() }}_grp.{{ field }} = '1;
+        @(negedge clk_i);
+        if (reg_rdata_o{{ field_info.BITS }} != '1) begin
+            $display("update check for {{ field }} failed");
+            error_cnt++;
+        end
+            {%- endfor %}
+        {%- endfor %}
+    {% endif %}
+{%- endfor %}
+
+        #100;
+        if (error_cnt == 0) $display("TEST PASSED");
+        else $display("TEST FAILED");
+        $finish;
+    end
+
+endmodule
+
