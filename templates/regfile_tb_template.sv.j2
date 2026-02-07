@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-`include "misc_tasks.sv"
-`include "reg_macros.sv"
 //==============================================================//
 //  Module:       {{ peripheral_name }}_reg_file_tb
 //  File:         {{ peripheral_name }}_reg_file_tb.sv
@@ -23,10 +21,10 @@
 //                - Manual sections (e.g., monitors or scoreboards) are
 //                  safe to modify and extend.
 //==============================================================//
-`include "reg_macros.sv"
+`include "{{ peripheral_name }}_reg_macros.sv"
 import {{ peripheral_name }}_reg_pkg::*;
 
-module {{ peripheral_name }}_reg_file_tb;
+module {{ peripheral_name }}_regfile_tb;
 
     // ------------------------------------------------------------
     //  Parameters
@@ -78,6 +76,18 @@ module {{ peripheral_name }}_reg_file_tb;
         clk_counter = 0;
         error_cnt = 0;
 
+    // status registers don't have write permission
+    // Therefore reset is not controlled by regfile
+{%- for group, group_info in group_data.items() %}
+    {%- if "W" not in group_info.ACCESS %}
+        {% for reg, reg_info in reg_data[group].items() %}
+            {%- for field, field_info in reg_info["FIELDS"].items() %}
+        {{ group.lower() }}_grp.{{ field }} = {{ field_info.RESET_VAL }};
+            {%- endfor %}
+        {% endfor %}
+    {% endif %}
+{%- endfor %}
+
         reset_i      = 1'b1;
         reg_we_i     = 1'b0;
         reg_waddr_i  = '0;
@@ -101,6 +111,7 @@ module {{ peripheral_name }}_reg_file_tb;
         reg_wdata_i = wdata;
         $display("[%t] Writing data %h to address %h", $realtime, wdata, waddr);
         @(posedge clk_i);
+        #1;
         reg_we_i = 1'b0;
     end
     endtask
@@ -137,12 +148,12 @@ module {{ peripheral_name }}_reg_file_tb;
 
         // -- Read Signals --
         .reg_raddr_i (reg_raddr_i),
-        .reg_rdata_o (reg_rdata_o),
+        .reg_rdata_o (reg_rdata_o)
     );
 
     initial begin
-
-        dump_setup;
+        $dumpfile("{{ peripheral_name }}_regfile_tb.vcd");
+        $dumpvars(0, {{ peripheral_name }}_regfile_tb);
 
         $display("==== Starting {{ peripheral_name }} Register File Test ====");
         apply_reset();

@@ -4,6 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 import sys
 import os
+import shutil
 
 def process_groups(groups):
     group_headers = [cell.value for cell in next(groups.iter_rows(min_row=1, max_row=1))]
@@ -77,7 +78,7 @@ def process_registers(registers):
 
     # Write info for last register
     reg_data[active_group][active_reg] = reg_info
-    reg_data["ADDR_WIDTH"] = int(offset_max - 1).bit_length()
+    reg_data["ADDR_WIDTH"] = int(offset_max).bit_length()
 
     return reg_data
 
@@ -102,12 +103,15 @@ def excel_to_yaml(input_file, output_file):
 
     return
 
-def generate_macros(yaml_file, macro_dir):
+def generate_macros(peripheral_name, yaml_file, macro_dir):
     with open(yaml_file, "r") as f:
         combined_data = yaml.safe_load(f)
         reg_data = combined_data.get("REGISTERS")
 
-    with open(macro_file, "w") as f:
+    file_name = f"{peripheral_name}_reg_macros.sv"
+    macro_path = os.path.abspath(f"{macro_dir}/{file_name}")
+
+    with open(macro_path, "w") as f:
         f.write("////////////////////////////////////////////////\n")
         f.write("// AUTO-GENERATED PERIPHERAL REGISTER MACROS //\n")
         f.write("///////////////////////////////////////////////\n")
@@ -126,12 +130,18 @@ def generate_macros(yaml_file, macro_dir):
                 line = f"`define {name_field} {addr_field} // {reg_info['REG_DESCRIPTION']}\n"
                 f.write(line)
             f.write("\n")
-    return
+
+    shutil.copy(macro_path, f"./outputs/{file_name}")
+
+    return macro_path
 
 def generate_package(peripheral_name, yaml_file, package_op_dir):
     with open(yaml_file, "r") as f:
         combined_data = yaml.safe_load(f)
         reg_data = combined_data.get("REGISTERS")
+
+    file_name = f"{peripheral_name}_reg_package.sv"
+    package_path = os.path.abspath(f"{package_op_dir}/{file_name}")
 
     # Jinja setup
     env = Environment(loader=FileSystemLoader("templates"))
@@ -140,16 +150,24 @@ def generate_package(peripheral_name, yaml_file, package_op_dir):
     package_output = package_template.render(peripheral_name=peripheral_name,
                                              reg_data=reg_data)
 
-    with open(f"{package_op_dir}/{peripheral_name}_reg_package.sv", "w") as f:
+    with open(package_path, "w") as f:
         f.write(package_output)
 
-    return
+    shutil.copy(package_path, f"./outputs/{file_name}")
+
+    return package_path
 
 def generate_rtl(peripheral_name, yaml_file, rtl_op_dir, tb_op_dir):
     with open(yaml_file, "r") as f:
         combined_data = yaml.safe_load(f)
         reg_data = combined_data.get("REGISTERS")
         group_data = combined_data.get("GROUPS")
+
+    rtl_file_name = f"{peripheral_name}_regfile.sv"
+    rtl_path = os.path.abspath(f"{rtl_op_dir}/{rtl_file_name}")
+
+    tb_file_name = f"{peripheral_name}_regfile_tb.sv"
+    tb_path = os.path.abspath(f"{tb_op_dir}/{tb_file_name}")
 
     for reg_group in reg_data.keys():
         if (reg_group == "ADDR_WIDTH"):
@@ -165,23 +183,26 @@ def generate_rtl(peripheral_name, yaml_file, rtl_op_dir, tb_op_dir):
     # Jinja setup
     env = Environment(loader=FileSystemLoader("templates"))
 
-    rtl_template = env.get_template("peripheral_regfile_template.sv.j2")
+    rtl_template = env.get_template("regfile_template.sv.j2")
     rtl_output = rtl_template.render(peripheral_name=peripheral_name,
                                      reg_data=reg_data,
                                      group_data=group_data,
                                      max_name_len=max_name_len)
 
-    tb_template = env.get_template("peripheral_regfile_tb_template.sv.j2")
+    tb_template = env.get_template("regfile_tb_template.sv.j2")
     tb_output = tb_template.render(peripheral_name=peripheral_name,
                                    reg_data=reg_data,
                                    group_data=group_data,
                                    max_name_len=max_name_len)
 
-    with open(f"{rtl_op_dir}/{peripheral_name}_regfile.sv", "w") as rtl_file, open(f"{tb_op_dir}/{peripheral_name}_regfile_tb.sv", "w") as tb_file:
+    with open(rtl_path, "w") as rtl_file, open(tb_path, "w") as tb_file:
         rtl_file.write(rtl_output)
         tb_file.write(tb_output)
 
-    return
+    shutil.copy(rtl_path, f"./outputs/{rtl_file_name}")
+    shutil.copy(tb_path, f"./outputs/{tb_file_name}")
+
+    return rtl_path,tb_path
 
 def generate_c_defs(yaml_file, cdef_op_dir):
     with open(yaml_file, "r") as f:
@@ -204,6 +225,22 @@ def generate_c_defs(yaml_file, cdef_op_dir):
     with open(cdef_op_dir, "w") as cdef_file:
         cdef_file.write(csr_defs_output)
 
+def generate_run_script(peripheral_name, script_output_dir, macro_path, package_path, rtl_path, tb_path):
+    script_path = f"{script_output_dir}/run_regfile_tb.sh"
+
+    # Jinja setup
+    env = Environment(loader=FileSystemLoader("templates"))
+
+    run_script_template = env.get_template("run_regfile_tb_template.sh.j2")
+    run_script_output = run_script_template.render(peripheral_name=peripheral_name,
+                                                   macro_path=macro_path,
+                                                   package_path=package_path,
+                                                   tb_path=tb_path,
+                                                   rtl_path=rtl_path)
+
+    with open(script_path, "w") as f:
+        f.write(run_script_output)
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python3 peripheral_regblk_gen.py <yaml_config_file>")
@@ -212,34 +249,39 @@ def main():
     config_file = sys.argv[1]
 
     with open(config_file, "r") as f:
+        path_info = yaml.safe_load(f)
 
+    peripheral_name = path_info.get("peripheral_name", "no_name_provided")
+    spreadsheet_path = path_info.get("spreadsheet_path", "./outputs")
+    rtl_output_dir = path_info.get("rtl_output_dir", "./outputs")
+    tb_output_dir = path_info.get("tb_output_dir", "./outputs")
+    package_output_dir = path_info.get("package_output_dir", "./outputs")
+    macro_output_dir = path_info.get("macro_output_dir", "./outputs")
+    cdef_output_dir = path_info.get("cdef_output_dir", "./outputs")
+    script_output_dir = path_info.get("script_output_dir", "./outputs")
 
+    yaml_file = f"./outputs/{peripheral_name}_registers.yml"
 
-
-    peripheral_name = sys.argv[1]
-    spreadsheet_path = sys.argv[2]
-    rtl_output_path = sys.argv[3]
-    tb_output_path = sys.argv[4]
-    macro_output_path = sys.argv[5]
-    cdef_output_path = sys.argv[6]
-
-    yaml_file = "./outputs/csr_registers.yml"
-
-    os.makedirs(os.path.dirname(rtl_output_path), exist_ok=True)
-    os.makedirs(os.path.dirname(tb_output_path), exist_ok=True)
-    os.makedirs(os.path.dirname(macro_output_path), exist_ok=True)
-    os.makedirs(os.path.dirname(cdef_output_path), exist_ok=True)
-    os.makedirs(os.path.dirname("./outputs"), exist_ok=True)
+    os.makedirs(rtl_output_dir, exist_ok=True)
+    os.makedirs(tb_output_dir, exist_ok=True)
+    os.makedirs(package_output_dir, exist_ok=True)
+    os.makedirs(package_output_dir, exist_ok=True)
+    os.makedirs(macro_output_dir, exist_ok=True)
+    os.makedirs(cdef_output_dir, exist_ok=True)
+    os.makedirs("./outputs", exist_ok=True)
 
     excel_to_yaml(spreadsheet_path, yaml_file)
-    generate_macros(yaml_file, macro_output_path)
-    generate_package("example", yaml_file, package_file)
-    generate_rtl("example", yaml_file, rtl_output_path, tb_output_path)
-    # generate_c_defs(yaml_file, cdef_output_path)
+    macro_path = generate_macros(peripheral_name, yaml_file, macro_output_dir)
+    package_path = generate_package(peripheral_name, yaml_file, package_output_dir)
+    rtl_path, tb_path = generate_rtl(peripheral_name, yaml_file, rtl_output_dir, tb_output_dir)
+
+    generate_run_script(peripheral_name, script_output_dir, macro_path, package_path, rtl_path, tb_path)
+
+    # generate_c_defs(yaml_file, cdef_output_dir)
     #
-    # print(f"[OK] Generated RTL:   {rtl_output_path}")
+    # print(f"[OK] Generated RTL:   {rtl_output_dir}")
     # print(f"[OK] Generated TB:    {tb_output_path}")
-    # print(f"[OK] Generated Macros:{macro_output_path}")
+    # print(f"[OK] Generated Macros:{macro_output_dir}")
     # print(f"[OK] Generated C Defines:{cdef_output_path}")
 
 if __name__ == "__main__":
