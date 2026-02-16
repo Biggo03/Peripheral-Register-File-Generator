@@ -204,26 +204,72 @@ def generate_rtl(peripheral_name, yaml_file, rtl_op_dir, tb_op_dir):
 
     return rtl_path,tb_path
 
-def generate_c_defs(yaml_file, cdef_op_dir):
+def generate_c_defs(peripheral_name, yaml_file, cdef_op_dir):
     with open(yaml_file, "r") as f:
-        reg_data = yaml.safe_load(f)
+        combined_data = yaml.safe_load(f)
+        reg_data = combined_data.get("REGISTERS")
+
+    c_macro_file_name = f"{peripheral_name}_reg_macros.h"
 
     define_info = {}
-    for csr_name, csr_info in reg_data.items():
-        define_info[f"CSR_{csr_name}"] = {
-                                          "ADDRESS": f"0x{csr_info['ADDRESS']}u",
-                                          "DESCRIPTION": csr_info["DESCRIPTION"]
-                                         }
+    max_name_len = 0
+    for group_name, group_info in reg_data.items():
+        if (group_name == "ADDR_WIDTH"):
+            continue
+        for reg_name, reg_info in group_info.items():
+            if (len(reg_info["ADDR_MACRO"]) > max_name_len):
+                max_name_len = len(reg_info["ADDR_MACRO"])
 
-    max_name_len = max(len(name) for name in define_info.keys())
+
+            addr_offset = int(reg_info["ADDR_OFFSET"][2:]) & 0xFFFFFFFF
+            define_info[f"{reg_name.upper()}"] = {
+                "ADDR_MACRO": reg_info["ADDR_MACRO"],
+                "ADDR_OFFSET": f"0x{addr_offset:08X}u",
+                "REG_DESCRIPTION": reg_info["REG_DESCRIPTION"]
+            }
+
+            for field_name, field_info in reg_info["FIELDS"].items():
+                field_dict = {}
+                field_dict["MASK"] = range_to_mask(field_info["BITS"])
+                field_dict["FIELD_DESCRIPTION"] = field_info["FIELD_DESCRIPTION"]
+
+                define_info[reg_name.upper()][field_name] = field_dict
+
+                if (len(field_name) > max_name_len):
+                    max_name_len = len(field_name)
 
     env = Environment(loader=FileSystemLoader("templates"))
 
-    csr_defs_template = env.get_template("csr_defs.h.j2")
-    csr_defs_output = csr_defs_template.render(define_info=define_info, max_name_len=max_name_len)
+    c_macro_template = env.get_template("reg_c_macros.h.j2")
+    reg_c_macros_output = c_macro_template.render(peripheral_name=peripheral_name,
+                                                  define_info=define_info,
+                                                  max_name_len=max_name_len)
 
-    with open(cdef_op_dir, "w") as cdef_file:
-        cdef_file.write(csr_defs_output)
+    with open(f"{cdef_op_dir}/{c_macro_file_name}", "w") as cdef_file:
+        cdef_file.write(reg_c_macros_output)
+
+    shutil.copy(f"{cdef_op_dir}/{c_macro_file_name}", f"./outputs/{c_macro_file_name}")
+
+def range_to_mask(bit_range):
+    # Expect "[msb:lsb]"
+    # Or [bit]
+    if (":" in bit_range):
+        msb_str, lsb_str = bit_range.strip("[]").split(":")
+        msb = int(msb_str)
+        lsb = int(lsb_str)
+    else:
+        msb = int(bit_range.strip("[]"))
+        lsb = int(bit_range.strip("[]"))
+
+    if msb < lsb:
+        raise ValueError(f"Invalid bit range {bit_range}")
+
+    width = msb - lsb + 1
+    mask = ((1 << width) - 1) << lsb
+
+    mask_hex = f"0x{(mask & 0xFFFFFFFF):08X}u"
+
+    return mask_hex
 
 def generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macro_path, package_path, rtl_path, tb_path):
     script_path = f"{script_output_dir}/run_regfile_tb.sh"
@@ -279,7 +325,7 @@ def main():
     rtl_path, tb_path = generate_rtl(peripheral_name, yaml_file, rtl_output_dir, tb_output_dir)
     generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macro_path, package_path, rtl_path, tb_path)
 
-    # generate_c_defs(yaml_file, cdef_output_dir)
+    generate_c_defs(peripheral_name, yaml_file, cdef_output_dir)
     #
     # print(f"[OK] Generated RTL:   {rtl_output_dir}")
     # print(f"[OK] Generated TB:    {tb_output_path}")
