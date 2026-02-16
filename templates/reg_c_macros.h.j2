@@ -2,17 +2,19 @@
 #define {{ peripheral_name.upper() }}_REG_DEFS_H
 
 // ------------------------------------------------------------
-// Custom implementation-defined CSRs
+//  {{ peripheral_name }} registers
 // ------------------------------------------------------------
+{#- Base name width (max_name_len + 2) plus "_MASK" (5 chars) -#}
+{%- set macro_width = max_name_len + 7 %}
 {% for reg_name, reg_info in define_info.items() %}
 // {{ reg_name }}
 // {{ reg_info.REG_DESCRIPTION }}
-#define {{ reg_info.ADDR_MACRO.ljust(max_name_len + 2) }} {{ reg_info.ADDR_OFFSET }}
+#define {{ reg_info.ADDR_MACRO.ljust(macro_width) }} {{ reg_info.ADDR_OFFSET }}
 {%- for field_name, field_info in reg_info.items() %}
 {%- if "ADDR_MACRO" not in field_name and "ADDR_OFFSET" not in field_name and "REG_DESCRIPTION" not in field_name %}
-#define {{ field_name.upper().ljust(max_name_len + 2) }} {{ field_info.MASK }} //{{ field_info.FIELD_DESCRIPTION }}
+{%- set macro_name = peripheral_name.upper() ~ '_' ~ field_name.upper() ~ '_MASK' %}
+#define {{ macro_name.ljust(macro_width) }} {{ field_info.MASK }} //{{ field_info.FIELD_DESCRIPTION }}
 {%- endif %}
 {%- endfor %}
 {% endfor %}
-
 #endif // {{ peripheral_name.upper() }}_REG_DEFS_H

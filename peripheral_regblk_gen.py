@@ -82,7 +82,7 @@ def process_registers(registers):
 
     return reg_data
 
-def excel_to_yaml(input_file, output_file):
+def excel_to_yaml(input_file, peripheral_name, output_file):
     wb = load_workbook(input_file)
     registers = wb["Registers"]
     groups = wb["Groups"]
@@ -94,6 +94,13 @@ def excel_to_yaml(input_file, output_file):
 
     combined_data["GROUPS"] = group_data
     combined_data["REGISTERS"] = reg_data
+
+    #Prefix the macros
+    for reg_group, registers in reg_data.items():
+        if ("ADDR_WIDTH" not in reg_group):
+            for reg_name, reg_info in registers.items():
+                reg_data[reg_group][reg_name]["ADDR_MACRO"] = f'{peripheral_name.upper()}_{reg_info["ADDR_MACRO"]}'
+
 
     with open(output_file, "w") as f:
         yaml_str = yaml.dump(combined_data, sort_keys=False)
@@ -319,18 +326,13 @@ def main():
     os.makedirs(cdef_output_dir, exist_ok=True)
     os.makedirs("./outputs", exist_ok=True)
 
-    excel_to_yaml(spreadsheet_path, yaml_file)
+    excel_to_yaml(spreadsheet_path, peripheral_name, yaml_file)
     macro_path = generate_macros(peripheral_name, yaml_file, macro_output_dir)
     package_path = generate_package(peripheral_name, yaml_file, package_output_dir)
     rtl_path, tb_path = generate_rtl(peripheral_name, yaml_file, rtl_output_dir, tb_output_dir)
     generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macro_path, package_path, rtl_path, tb_path)
 
     generate_c_defs(peripheral_name, yaml_file, cdef_output_dir)
-    #
-    # print(f"[OK] Generated RTL:   {rtl_output_dir}")
-    # print(f"[OK] Generated TB:    {tb_output_path}")
-    # print(f"[OK] Generated Macros:{macro_output_dir}")
-    # print(f"[OK] Generated C Defines:{cdef_output_path}")
 
 if __name__ == "__main__":
     main()
