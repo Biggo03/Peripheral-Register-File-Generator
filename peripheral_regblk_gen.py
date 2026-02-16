@@ -54,9 +54,13 @@ def process_registers(registers):
             reg_info["ADDR_OFFSET"] = addr_offset
             reg_info["ADDR_MACRO"] = f"{active_reg.upper()}_ADDR"
         else:
-            # Extract relavent registers
-            field_info = {}
             field = entry.pop("NAME").upper()
+            # Don't generate anything for reserved fields
+            if (field == "RESERVED"):
+                continue
+
+            # Extract relavent fields
+            field_info = {}
             access = entry.pop("ACCESS/GROUP").upper()
             bits = entry.pop("BITS")
             reset_val = entry.pop("RESET_VAL")
