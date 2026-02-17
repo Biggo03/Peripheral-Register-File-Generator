@@ -262,7 +262,7 @@ def generate_c_defs(peripheral_name, yaml_file, cdef_op_dir):
                 max_name_len = len(reg_info["ADDR_MACRO"])
 
 
-            addr_offset = int(reg_info["ADDR_OFFSET"][2:]) & 0xFFFFFFFF
+            addr_offset = int(reg_info["ADDR_OFFSET"], 16) & 0xFFFFFFFF
             define_info[f"{reg_name.upper()}"] = {
                 "ADDR_MACRO": reg_info["ADDR_MACRO"],
                 "ADDR_OFFSET": f"0x{addr_offset:08X}u",
