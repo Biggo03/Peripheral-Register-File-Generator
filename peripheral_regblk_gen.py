@@ -7,6 +7,10 @@ import yaml
 import sys
 import os
 import shutil
+from pathlib import Path
+
+SCRIPT_DIR = str(Path(__file__).resolve().parent)
+TEMPLATE_DIR = f"{SCRIPT_DIR}/templates"
 
 ##############################
 #       EXCEL PROCESSING     #
@@ -59,10 +63,12 @@ def process_registers(registers):
             reg_info["ADDR_OFFSET"] = addr_offset
             reg_info["ADDR_MACRO"] = f"{active_reg.upper()}_ADDR"
         else:
-            field = entry.pop("NAME").upper()
+            field = entry.pop("NAME")
             # Don't generate anything for reserved fields
-            if (field == "RESERVED"):
+            if (field == "RESERVED" or not field):
                 continue
+            else:
+                field = field.upper()
 
             # Extract relavent fields
             field_info = {}
@@ -146,7 +152,7 @@ def generate_rtl(peripheral_name, yaml_file, rtl_op_dir, tb_op_dir):
     max_name_len = max(len(name) for name in reg_data.keys())
 
     # Jinja setup
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
     rtl_template = env.get_template("regfile_template.sv.j2")
     rtl_output = rtl_template.render(peripheral_name=peripheral_name,
@@ -224,7 +230,7 @@ def generate_package(peripheral_name, yaml_file, package_op_dir):
     package_path = os.path.abspath(f"{package_op_dir}/{file_name}")
 
     # Jinja setup
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
     package_template = env.get_template("reg_package_template.sv.j2")
     package_output = package_template.render(peripheral_name=peripheral_name,
@@ -273,7 +279,7 @@ def generate_c_defs(peripheral_name, yaml_file, cdef_op_dir):
                 if (len(field_name) > max_name_len):
                     max_name_len = len(field_name)
 
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
     c_macro_template = env.get_template("reg_c_macros.h.j2")
     reg_c_macros_output = c_macro_template.render(peripheral_name=peripheral_name,
@@ -292,7 +298,7 @@ def generate_run_script(peripheral_name, script_output_dir, sim_output_dir, macr
     sim_output_dir = os.path.abspath(sim_output_dir)
 
     # Jinja setup
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
     run_script_template = env.get_template("run_regfile_tb_template.sh.j2")
     run_script_output = run_script_template.render(peripheral_name=peripheral_name,
