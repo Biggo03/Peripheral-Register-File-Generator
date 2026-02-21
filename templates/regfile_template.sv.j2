@@ -44,7 +44,7 @@ module {{ peripheral_name }}_regfile (
             {%- for reg_name, reg_info in reg_data[group].items() %}
             // {{ reg_name }}
             {%- for field_name, field_info in reg_info.FIELDS.items() %}
-            {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len) }} <= {{ field_info.RESET_VAL }};
+            {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len + 2) }} <= {{ field_info.RESET_VAL }};
             {%- endfor %}
             {% endfor %}
 
@@ -58,7 +58,7 @@ module {{ peripheral_name }}_regfile (
                 {{ reg_info.ADDR_MACRO }}:
                 begin
                     {%- for field_name, field_info in reg_info.FIELDS.items() %}
-                    {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len) }} <= reg_wdata_i{{ field_info.BITS }};
+                    {{ group.lower() }}_grp.{{ field_name.ljust(max_name_len + 2) }} <= reg_wdata_i{{ field_info.BITS }};
                     {%- endfor %}
                 end
                 {% endfor %}
@@ -76,7 +76,7 @@ module {{ peripheral_name }}_regfile (
             {{ reg_info.ADDR_MACRO }}:
             begin
             {%- for field_name, field_info in reg_info.FIELDS.items() %}
-                reg_rdata_o{{ field_info.BITS }} = {{ group.lower() }}_grp.{{ field_name }};
+                reg_rdata_o{{ field_info.BITS.ljust(7) }} = {{ group.lower() }}_grp.{{ field_name }};
             {%- endfor %}
             end
             {%- endfor %}

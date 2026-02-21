@@ -211,7 +211,7 @@ def generate_macros(peripheral_name, yaml_file, macro_dir):
             group_header = f"// REGISTER GROUP: {reg_group}\n"
             f.write(group_header)
             for reg_info in reg_data[reg_group].values():
-                name_field = reg_info['ADDR_MACRO'].ljust(max_name_len + 10)
+                name_field = reg_info['ADDR_MACRO'].ljust(max_name_len + 12)
                 addr_field = f"{reg_data['ADDR_WIDTH']}'h{reg_info['ADDR_OFFSET'].replace('0x', '')}"
                 line = f"`define {name_field} {addr_field} // {reg_info['REG_DESCRIPTION']}\n"
                 f.write(line)
